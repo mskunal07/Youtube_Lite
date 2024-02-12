@@ -46,14 +46,7 @@ const userSchema = new mongoose.Schema({
     refreshToken: {
         type: String,
     },
-    // createdAt: {
-    //     type: Date,
-    //     required: true,
-    // },
-    // updatedAt: {
-    //     type: Date,
-    //     required: true,
-    // },
+    
 },{timestamps:true});
 
 // call back is written like function() { ... } because we want to 
