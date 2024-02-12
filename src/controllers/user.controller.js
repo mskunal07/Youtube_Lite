@@ -4,6 +4,28 @@ import {User} from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 
+const generateAccessAndRefereshToken = async (userId) => {
+
+    try {
+
+        const user = await User.findById(userId);
+        const accessToken = await user.generateAccessToken();
+        const refreshToken = await user.generateRefreshToken();
+
+        user.refreshToken = refreshToken;
+        user.save({ValidateBeforeSave: false});  // validateBeforeSave is to tell mongodb that just save the 
+                                                // current user and don't ask for other properties/fields of user
+                                                // like username,email,pass ....
+                                                // because user.save() - method is used to save the current object 
+                                                // in database so by default it will check for other properties of 
+                                                // user aswell like username,pass.... so to avoid that user validateBeforeSave
+        
+        return {accessToken,refreshToken};
+
+    } catch (error) {
+        throw new ApiError(500,"Error while generating Access and Refresh Token")
+    }
+}
 
 const registerUser = asyncHandler( async (req,res) => {
 
@@ -92,4 +114,86 @@ const registerUser = asyncHandler( async (req,res) => {
     )
 });
 
-export {registerUser};
+const loginUser = asyncHandler( async(req,res) => {
+
+    // get user data from req.body
+    // find user based on username or email
+    // authenticate user based on password
+    // generater access and refresh token
+    // send cookie
+
+    const {email,username,password} = req.body;
+
+    if(!email && !username) {
+        throw new ApiError(400,"email or username required ! ");
+    }
+
+    const user = await User.findOne({
+        $or : [{username},{email}],
+    });
+
+    if(!user) throw new ApiError(404,"User Not Found ! ");
+
+    const isPasswordValid = await user.isPasswordCorrect(password);
+
+    if(!isPasswordValid) {
+        throw new ApiError(401,"Password incorrect ! ");
+    }
+
+    const {accessToken,refreshToken} = await generateAccessAndRefereshToken(user._id);
+
+    const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
+
+    const options = {
+        httpOnly: true,
+        secure: true
+    }
+
+    return res.status(200)
+    .cookie("accessToken",accessToken,options)
+    .cookie("refreshToken",refreshToken,options)
+    .json(
+        new ApiResponse(
+            200,
+            {
+                user: loggedInUser,accessToken,refreshToken
+            },
+            "User logged in Successfully !! "
+        )
+    );
+});
+
+const logoutUser = asyncHandler( async(req,res) => {
+
+    // remove refresh token of the user 
+    // remove cookies of the user 
+
+    await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $set: {
+                refreshToken: undefined
+            }
+        },
+        {
+            new:true
+        }
+    )
+
+    // clear cookie and return res
+
+    const options = {
+        httpOnly: true,
+        secure: true
+    }
+
+    return res.status(200)
+    .clearCookie("accessToken",options)
+    .clearCookie("refreshToken",options)
+    .json(
+        new ApiResponse(200, {}, "User Logout !! ")
+    );
+
+});
+
+export { registerUser,loginUser,logoutUser };
