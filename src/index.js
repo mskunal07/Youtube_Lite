@@ -12,8 +12,6 @@ dotenv.config({
     path: './evn'
 })
 
-
-
 connectDB()
 .then( () => {
     app.on('err', (err) => {
